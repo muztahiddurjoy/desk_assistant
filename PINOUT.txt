@@ -21,19 +21,29 @@
  1. GC9A01 — 1.28" round IPS LCD, 240x240, 4-wire SPI
 -------------------------------------------------------------------------------
 
+ This is the 7-pin breakout. All seven pins are used; there is nothing else on
+ the board to connect.
+
    DISPLAY PIN     ESP32-S3        NOTES
    -----------     ------------    ---------------------------------------------
    VCC             3V3             3.3 V only. 5 V will kill the panel.
    GND             GND
-   SCL  (SCLK)     GPIO 5          SPI clock
-   SDA  (MOSI)     GPIO 4          data in; panel is write-only, no MISO wire
+   SCL             GPIO 5          SPI clock
+   SDA             GPIO 4          data in; panel is write-only, no MISO wire
+   RES             GPIO 8          hardware reset
    DC              GPIO 7          data / command select
    CS              GPIO 6          chip select
-   RST             GPIO 8          hardware reset
-   BLK  (BL)       GPIO 9          backlight; PWM-dimmed via LEDC ch.0 @ 5 kHz
 
-   Some GC9A01 breakouts leave BLK unconnected internally (backlight hard-wired
-   always-on). If dimming does nothing, that is why — not a firmware bug.
+   NO BACKLIGHT PIN. On this breakout the backlight is tied to VCC on the board:
+   it is on whenever the panel is powered, at full brightness, and it cannot be
+   dimmed from firmware. TFT_BL is deliberately left undefined in platformio.ini
+   — pins.h #errors the build if anyone puts it back.
+
+   Consequence for the firmware: the splash fades in by scaling the logo's own
+   pixel values, not by ramping a backlight. Any "brightness" on this panel has
+   to be paid for in pixel values. If you later want real dimming, the usual mod
+   is to cut the backlight trace and feed the LED anode from a transistor driven
+   by GPIO 9 (which this project leaves free for exactly that).
 
    SPI runs at 40 MHz. The S3's GPIO matrix routes SPI to any pin at that speed
    without trouble. 80 MHz often works too, but only with short wiring; leave it
@@ -79,6 +89,8 @@
  3. Reserved / spare
 -------------------------------------------------------------------------------
 
+   GPIO 9          free — was the backlight pin until the panel turned out to
+                   have none. Keep it for a backlight-dimming transistor mod.
    GPIO 12         free — intended for a mode/wake button (to GND, INPUT_PULLUP)
    GPIO 13         free — intended for I2C, or a second button
 

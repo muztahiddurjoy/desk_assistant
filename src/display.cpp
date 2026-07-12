@@ -30,9 +30,6 @@ int16_t  dotX[RING_DOTS];
 int16_t  dotY[RING_DOTS];
 uint16_t dotCache[RING_DOTS];  // last colour actually pushed to the panel
 
-constexpr uint8_t BL_CHANNEL = 0;
-constexpr uint32_t BL_FREQ_HZ = 5000;
-
 AppState state = AppState::Boot;
 char     message[40] = "";
 bool     centreDirty = true;
@@ -113,6 +110,32 @@ uint16_t ringColour(uint8_t i, uint32_t ms, uint32_t accent) {
     return COL_TRACK;
 }
 
+// Push the logo with every pixel scaled to `level` (0..255). One row is built in
+// RAM at a time, so this costs a 480-byte buffer rather than a 60 KB copy of the
+// whole image.
+static_assert(logo_width <= SCREEN_W, "row buffer below assumes the logo is no wider than the panel");
+
+void pushLogoAt(uint8_t level) {
+    uint16_t row[logo_width];
+
+    const int16_t x0 = (SCREEN_W - logo_width) / 2;
+    const int16_t y0 = (SCREEN_H - logo_height) / 2;
+
+    for (int16_t y = 0; y < logo_height; y++) {
+        const uint16_t* src = &desk_logo[(uint32_t)y * logo_width];
+        for (int16_t x = 0; x < logo_width; x++) {
+            const uint16_t c = pgm_read_word(&src[x]);
+            // Scale in-place in 565; the channels are independent so there's no
+            // need to expand to 888 and back.
+            const uint16_t r = (uint16_t)(((c >> 11) & 0x1F) * level / 255);
+            const uint16_t g = (uint16_t)(((c >> 5) & 0x3F) * level / 255);
+            const uint16_t b = (uint16_t)((c & 0x1F) * level / 255);
+            row[x] = (uint16_t)((r << 11) | (g << 5) | b);
+        }
+        tft.pushImage(x0, y0 + y, logo_width, 1, row);
+    }
+}
+
 void renderCentre(uint32_t accent) {
     centre.fillSprite(COL_BG);
 
@@ -134,19 +157,13 @@ void renderCentre(uint32_t accent) {
 namespace Ui {
 
 void begin() {
-    // TFT_eSPI's init() drives TFT_BL high itself. Take the pin back afterwards
-    // so LEDC owns it and setBacklight() can actually dim.
     tft.init();
     tft.setRotation(0);  // square panel; rotation only matters for text origin
     tft.fillScreen(COL_BG);
 
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcAttach(PIN_TFT_BL, BL_FREQ_HZ, 8);
-#else
-    ledcSetup(BL_CHANNEL, BL_FREQ_HZ, 8);
-    ledcAttachPin(PIN_TFT_BL, BL_CHANNEL);
-#endif
-    setBacklight(0);  // stay dark until splash() has something to show
+    // logo.h is a native-endian uint16_t array; the panel wants high byte first.
+    // Set once — pushLogoAt() builds its rows the same way.
+    tft.setSwapBytes(true);
 
     for (uint8_t i = 0; i < RING_DOTS; i++) {
         float a = ((float)i / RING_DOTS) * 2.0f * (float)PI - (float)PI / 2.0f;  // i=0 at 12 o'clock
@@ -163,16 +180,10 @@ void begin() {
 void splash(uint32_t holdMs) {
     tft.fillScreen(COL_BG);
 
-    // logo.h is a native-endian uint16_t array; the panel wants high byte first.
-    tft.setSwapBytes(true);
-    tft.pushImage((SCREEN_W - logo_width) / 2,
-                  (SCREEN_H - logo_height) / 2,
-                  logo_width, logo_height, desk_logo);
-
-    for (uint8_t p = 0; p <= 100; p += 2) {  // fade in, ~0.5 s
-        setBacklight(p);
-        delay(5);
+    for (uint16_t level = 0; level <= 255; level += 15) {  // ~17 steps
+        pushLogoAt((uint8_t)level);
     }
+    pushLogoAt(255);  // land exactly on full, whatever the step size divides to
 
     delay(holdMs);
 
@@ -209,16 +220,6 @@ void update() {
         renderCentre(accent);
         centreDirty = false;
     }
-}
-
-void setBacklight(uint8_t percent) {
-    if (percent > 100) percent = 100;
-    uint32_t duty = (uint32_t)percent * 255 / 100;
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(PIN_TFT_BL, duty);
-#else
-    ledcWrite(BL_CHANNEL, duty);
-#endif
 }
 
 }  // namespace Ui

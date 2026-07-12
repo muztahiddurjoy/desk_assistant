@@ -35,7 +35,6 @@ static void help() {
         "\ncommands:\n"
         "  idle | listen | think | speak | alert   set state\n"
         "  demo                                    resume the auto state cycle\n"
-        "  bl <0-100>                              backlight percent\n"
         "  led <0-255>                             LED brightness\n"
         "  id                                      identify sticks (L=red, R=green)\n"
         "  help\n"));
@@ -59,11 +58,6 @@ static void handleCommand(String line) {
         demo = true;
         demoNext = 0;
         Serial.println("[demo] on");
-    }
-    else if (line.startsWith("bl ")) {
-        uint8_t p = (uint8_t)constrain(line.substring(3).toInt(), 0, 100);
-        Ui::setBacklight(p);
-        Serial.printf("[backlight] %u%%\n", p);
     }
     else if (line.startsWith("led ")) {
         uint8_t b = (uint8_t)constrain(line.substring(4).toInt(), 0, 255);
@@ -113,8 +107,8 @@ void setup() {
     Serial.println(F("\n=== desk assistant ==="));
     Serial.printf("board  : ESP32-S3  %u MHz, %u KB free heap\n",
                   getCpuFrequencyMhz(), ESP.getFreeHeap() / 1024);
-    Serial.printf("display: GC9A01 240x240  SPI mosi=%d sclk=%d cs=%d dc=%d rst=%d bl=%d\n",
-                  PIN_TFT_MOSI, PIN_TFT_SCLK, PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST, PIN_TFT_BL);
+    Serial.printf("display: GC9A01 240x240  mosi=%d sclk=%d cs=%d dc=%d rst=%d  (backlight: hard-wired)\n",
+                  PIN_TFT_MOSI, PIN_TFT_SCLK, PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST);
     Serial.printf("leds   : 2 x %u WS2812 on GPIO %d and %d (cap %lu mA)\n",
                   LEDS_PER_STICK, PIN_LED_STICK_L, PIN_LED_STICK_R,
                   (unsigned long)LED_PSU_MILLIAMPS);

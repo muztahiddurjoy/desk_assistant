@@ -8,7 +8,11 @@ namespace Ui {
 
 void begin();
 
-// Blocking. Shows the logo, then fades the backlight up.
+// Blocking. Fades the logo in, holds, clears.
+//
+// The fade is done in software, by scaling the image's own pixels: this panel
+// has no BL pin, so the backlight is always on at full and there is nothing to
+// ramp. Any "screen brightness" here has to be paid for in pixel values.
 void splash(uint32_t holdMs);
 
 void setState(AppState s);
@@ -18,8 +22,5 @@ void setMessage(const char* msg);
 
 // Non-blocking; call every loop. Repaints only what changed.
 void update();
-
-// 0..100. No-op on breakouts whose BLK pin isn't actually wired to the panel.
-void setBacklight(uint8_t percent);
 
 }  // namespace Ui
