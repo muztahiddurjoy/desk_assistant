@@ -1,0 +1,102 @@
+===============================================================================
+ DESK ASSISTANT — PIN MAP
+ Board : ESP32-S3 Dev Module (ESP32-S3-DevKitC-1)
+ Last updated: 2026-07-12
+===============================================================================
+
+ All signal pins live in the GPIO 4..13 block. That block is chosen because on
+ the ESP32-S3 it is entirely free of side jobs:
+
+   - not strapping pins        (those are GPIO 0, 3, 45, 46)
+   - not SPI flash             (GPIO 26..32)
+   - not octal PSRAM           (GPIO 33..37 on R8 modules)
+   - not native USB            (GPIO 19, 20)
+   - not the onboard RGB LED   (GPIO 38 or 48, depending on revision)
+
+ So nothing here fights the bootloader, and the same map works whether your
+ module has PSRAM or not.
+
+
+-------------------------------------------------------------------------------
+ 1. GC9A01 — 1.28" round IPS LCD, 240x240, 4-wire SPI
+-------------------------------------------------------------------------------
+
+   DISPLAY PIN     ESP32-S3        NOTES
+   -----------     ------------    ---------------------------------------------
+   VCC             3V3             3.3 V only. 5 V will kill the panel.
+   GND             GND
+   SCL  (SCLK)     GPIO 5          SPI clock
+   SDA  (MOSI)     GPIO 4          data in; panel is write-only, no MISO wire
+   DC              GPIO 7          data / command select
+   CS              GPIO 6          chip select
+   RST             GPIO 8          hardware reset
+   BLK  (BL)       GPIO 9          backlight; PWM-dimmed via LEDC ch.0 @ 5 kHz
+
+   Some GC9A01 breakouts leave BLK unconnected internally (backlight hard-wired
+   always-on). If dimming does nothing, that is why — not a firmware bug.
+
+   SPI runs at 40 MHz. The S3's GPIO matrix routes SPI to any pin at that speed
+   without trouble. 80 MHz often works too, but only with short wiring; leave it
+   at 40 until the panel is confirmed stable.
+
+
+-------------------------------------------------------------------------------
+ 2. WS2812 — 2 x 8-LED stick (16 pixels total)
+-------------------------------------------------------------------------------
+
+   STICK           ESP32-S3        NOTES
+   -----------     ------------    ---------------------------------------------
+   L  DIN          GPIO 10         left stick,  logical pixels 0..7
+   R  DIN          GPIO 11         right stick, logical pixels 0..7
+   L,R  VCC        5V (VBUS)       NOT 3V3 — WS2812s brown out and turn green
+   L,R  GND        GND             must share ground with the ESP32
+
+   The two sticks get one data pin each rather than being daisy-chained, so each
+   is independently addressable and either can be reversed in firmware without
+   resoldering. To chain them instead (stick L DOUT -> stick R DIN), free GPIO 11
+   and change Leds::begin() to a single 16-pixel strip on GPIO 10.
+
+   TWO THINGS THAT BITE HERE:
+
+   a) LOGIC LEVEL. WS2812 datasheet wants Vih >= 0.7*VDD = 3.5 V at 5 V supply.
+      The ESP32-S3 drives 3.3 V. It usually works, but "usually" means the first
+      pixel flickers or shows the wrong colour on some batches. Two clean fixes:
+        - put a level shifter (74AHCT125 / SN74HCT245) on the data lines, or
+        - drop the LED supply to ~4.3 V with a 1N4007 in series with +5 V, which
+          brings Vih down to ~3.0 V and inside the ESP32's range.
+
+   b) POWER. 16 pixels at full white is ~960 mA. The dev module's 5V pin comes
+      straight off USB, so that will trip the port or brown out the S3 mid-frame.
+      Firmware caps the strip at 600 mA (FastLED power manager, see pins.h). If
+      you want full brightness, feed the sticks from their own 5 V supply and
+      only tie GND back to the ESP32.
+
+   Recommended on the data lines: 330-470 ohm series resistor at the ESP32 end.
+   Recommended across each stick's supply: 470-1000 uF electrolytic.
+
+
+-------------------------------------------------------------------------------
+ 3. Reserved / spare
+-------------------------------------------------------------------------------
+
+   GPIO 12         free — intended for a mode/wake button (to GND, INPUT_PULLUP)
+   GPIO 13         free — intended for I2C, or a second button
+
+   Everything outside 4..13 is untouched by this project.
+
+
+-------------------------------------------------------------------------------
+ 4. Keeping this file honest
+-------------------------------------------------------------------------------
+
+   The same numbers appear in three places:
+
+     platformio.ini    build_flags   (TFT_eSPI reads its pins ONLY from here)
+     include/pins.h    #defines      (everything the application code uses)
+     PINOUT.txt        this file     (what you solder from)
+
+   pins.h static_asserts itself against the build flags, so the first two cannot
+   silently disagree — the build fails instead. This file is the one that has to
+   be updated by hand. If you move a pin, move it here too.
+
+===============================================================================
