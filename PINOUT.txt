@@ -4,8 +4,9 @@
  Last updated: 2026-07-12
 ===============================================================================
 
- All signal pins live in the GPIO 4..13 block. That block is chosen because on
- the ESP32-S3 it is entirely free of side jobs:
+ Only one peripheral: the round display. Five signal pins, all inside GPIO 4..13.
+
+ That block is chosen because on the ESP32-S3 it is entirely free of side jobs:
 
    - not strapping pins        (those are GPIO 0, 3, 45, 46)
    - not SPI flash             (GPIO 26..32)
@@ -13,16 +14,16 @@
    - not native USB            (GPIO 19, 20)
    - not the onboard RGB LED   (GPIO 38 or 48, depending on revision)
 
- So nothing here fights the bootloader, and the same map works whether your
- module has PSRAM or not.
+ So nothing here fights the bootloader, and the same map works whether or not
+ your module has PSRAM.
 
 
 -------------------------------------------------------------------------------
  1. GC9A01 — 1.28" round IPS LCD, 240x240, 4-wire SPI
 -------------------------------------------------------------------------------
 
- This is the 7-pin breakout. All seven pins are used; there is nothing else on
- the board to connect.
+ The 7-pin breakout. All seven pins are used; there is nothing else on the board
+ to connect.
 
    DISPLAY PIN     ESP32-S3        NOTES
    -----------     ------------    ---------------------------------------------
@@ -35,70 +36,67 @@
    CS              GPIO 6          chip select
 
    NO BACKLIGHT PIN. On this breakout the backlight is tied to VCC on the board:
-   it is on whenever the panel is powered, at full brightness, and it cannot be
-   dimmed from firmware. TFT_BL is deliberately left undefined in platformio.ini
-   — pins.h #errors the build if anyone puts it back.
+   on whenever the panel is powered, at full brightness, not dimmable from
+   firmware. TFT_BL is deliberately left undefined in platformio.ini — pins.h
+   #errors the build if anyone puts it back. Any "brightness" on this panel has
+   to be paid for in pixel values.
 
-   Consequence for the firmware: the splash fades in by scaling the logo's own
-   pixel values, not by ramping a backlight. Any "brightness" on this panel has
-   to be paid for in pixel values. If you later want real dimming, the usual mod
-   is to cut the backlight trace and feed the LED anode from a transistor driven
-   by GPIO 9 (which this project leaves free for exactly that).
-
-   SPI runs at 40 MHz. The S3's GPIO matrix routes SPI to any pin at that speed
-   without trouble. 80 MHz often works too, but only with short wiring; leave it
-   at 40 until the panel is confirmed stable.
+   SPI runs at 40 MHz on SPI2 (see USE_HSPI_PORT below).
 
 
 -------------------------------------------------------------------------------
- 2. WS2812 — 2 x 8-LED stick (16 pixels total)
+ 2. Free pins
 -------------------------------------------------------------------------------
 
-   STICK           ESP32-S3        NOTES
-   -----------     ------------    ---------------------------------------------
-   L  DIN          GPIO 10         left stick,  logical pixels 0..7
-   R  DIN          GPIO 11         right stick, logical pixels 0..7
-   L,R  VCC        5V (VBUS)       NOT 3V3 — WS2812s brown out and turn green
-   L,R  GND        GND             must share ground with the ESP32
+   GPIO 9          free — never wired (would have been the backlight)
+   GPIO 10         free — was WS2812 stick L
+   GPIO 11         free — was WS2812 stick R
+   GPIO 12         free
+   GPIO 13         free
 
-   The two sticks get one data pin each rather than being daisy-chained, so each
-   is independently addressable and either can be reversed in firmware without
-   resoldering. To chain them instead (stick L DOUT -> stick R DIN), free GPIO 11
-   and change Leds::begin() to a single 16-pixel strip on GPIO 10.
+   The two WS2812 sticks have been removed from the project. Their pins, and all
+   the 5 V / level-shifting / power-budget care they needed, are gone with them.
 
-   TWO THINGS THAT BITE HERE:
-
-   a) LOGIC LEVEL. WS2812 datasheet wants Vih >= 0.7*VDD = 3.5 V at 5 V supply.
-      The ESP32-S3 drives 3.3 V. It usually works, but "usually" means the first
-      pixel flickers or shows the wrong colour on some batches. Two clean fixes:
-        - put a level shifter (74AHCT125 / SN74HCT245) on the data lines, or
-        - drop the LED supply to ~4.3 V with a 1N4007 in series with +5 V, which
-          brings Vih down to ~3.0 V and inside the ESP32's range.
-
-   b) POWER. 16 pixels at full white is ~960 mA. The dev module's 5V pin comes
-      straight off USB, so that will trip the port or brown out the S3 mid-frame.
-      Firmware caps the strip at 600 mA (FastLED power manager, see pins.h). If
-      you want full brightness, feed the sticks from their own 5 V supply and
-      only tie GND back to the ESP32.
-
-   Recommended on the data lines: 330-470 ohm series resistor at the ESP32 end.
-   Recommended across each stick's supply: 470-1000 uF electrolytic.
+   Anything you add later (button, I2C, I2S mic) should stay inside 4..13.
+   Everything outside that block is untouched by this project.
 
 
 -------------------------------------------------------------------------------
- 3. Reserved / spare
+ 3. Two settings the S3 will not work without
 -------------------------------------------------------------------------------
 
-   GPIO 9          free — was the backlight pin until the panel turned out to
-                   have none. Keep it for a backlight-dimming transistor mod.
-   GPIO 12         free — intended for a mode/wake button (to GND, INPUT_PULLUP)
-   GPIO 13         free — intended for I2C, or a second button
+ Both are in platformio.ini. Both cost hours if you don't know them, because
+ each one fails in a way that looks like broken hardware.
 
-   Everything outside 4..13 is untouched by this project.
+   USE_HSPI_PORT
+     TFT_eSPI has no VSPI on the ESP32-S3 (SPI0/1 belong to the flash). Without
+     an explicit port flag it binds to a bus that never starts, spiStartBus()
+     returns NULL, and the first writecommand() inside tft.init() dereferences
+     it: Guru Meditation / StoreProhibited / EXCVADDR 0x10, boot loop. Looks
+     exactly like a dead panel. USE_HSPI_PORT selects SPI2.
+
+   ARDUINO_USB_CDC_ON_BOOT=0
+     This board talks over a CH343 USB-UART bridge (lsusb: 1a86:55d3) on
+     /dev/ttyACM0. Setting this to 1 routes Serial to the S3's *native* USB
+     peripheral instead — a port that isn't in use — so you get total silence on
+     ttyACM0 while the firmware runs perfectly. Silent serial reads as a dead
+     board. Only set it to 1 if you move the cable to the port marked "USB".
 
 
 -------------------------------------------------------------------------------
- 4. Keeping this file honest
+ 4. Display orientation
+-------------------------------------------------------------------------------
+
+ The panel is MIRRORED in hardware — MADCTL bit MX, set in applyMirror() in
+ main.cpp — because it is viewed as a reflection (Pepper's-ghost / hologram rig).
+ Everything drawn comes out left-right reversed on the glass, for free.
+
+ Watch out: tft.setRotation() rewrites MADCTL from scratch and silently undoes
+ this. Call applyMirror() after any setRotation(), or never call it again.
+
+
+-------------------------------------------------------------------------------
+ 5. Keeping this file honest
 -------------------------------------------------------------------------------
 
    The same numbers appear in three places:

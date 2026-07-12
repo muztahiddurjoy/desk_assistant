@@ -18,27 +18,15 @@
 #define PIN_TFT_DC   7
 #define PIN_TFT_RST  8  // panel "RES"
 
-// ── WS2812 sticks, 8 pixels each, independently addressable ──────────────────
-#define PIN_LED_STICK_L 10
-#define PIN_LED_STICK_R 11
-
-// ── Reserved ─────────────────────────────────────────────────────────────────
-// Free inside the 4..13 block. GPIO9 came back when the backlight turned out to
-// be hard-wired; 12/13 are the natural home for a mode button and/or I2C.
-#define PIN_SPARE_A 9
-#define PIN_SPARE_B 12
-#define PIN_SPARE_C 13
+// ── Free ─────────────────────────────────────────────────────────────────────
+// GPIO 9..13 are all unused. The WS2812 sticks lived on 10 and 11; they are gone
+// and the pins are back. GPIO 9 was never wired (the panel's backlight turned
+// out to be hard-wired on the breakout).
+//
+// Anything you add goes here — a button, I2C, an I2S mic — and stays inside the
+// safe 4..13 block described in PINOUT.txt.
 
 // ── Hardware constants ───────────────────────────────────────────────────────
-constexpr uint8_t  LEDS_PER_STICK = 8;
-constexpr uint8_t  LED_COUNT      = LEDS_PER_STICK * 2;  // 16 total
-
-// WS2812s pull ~60 mA each at full white. 16 of them can ask for ~960 mA, which
-// a USB-powered dev module will not survive. FastLED's power manager scales
-// brightness to hold the whole strip under this budget.
-constexpr uint8_t  LED_PSU_VOLTS = 5;
-constexpr uint32_t LED_PSU_MILLIAMPS = 600;
-
 constexpr int16_t  SCREEN_W  = 240;
 constexpr int16_t  SCREEN_H  = 240;
 constexpr int16_t  SCREEN_CX = SCREEN_W / 2;  // 120 — the panel is round, so

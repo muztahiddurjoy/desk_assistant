@@ -17,12 +17,12 @@ enum class AppState : uint8_t {
 
 const char* stateName(AppState s);
 
-// Accent colour per state, used by BOTH renderers so the ring and the sticks
-// always agree. Display wants RGB565, FastLED wants 0xRRGGBB, so each state
-// carries both — derived from the same intent, converted once, here.
+// Accent colour per state. Carried in both spaces: RGB565 is what TFT_eSPI
+// draws with, 0xRRGGBB is what the renderer scales brightness in (channels are
+// independent there, so dimming doesn't shift the hue the way it does in 565).
 struct StateStyle {
-    uint16_t tft;  // RGB565 for TFT_eSPI
-    uint32_t rgb;  // 0xRRGGBB for FastLED
+    uint16_t tft;  // RGB565, ready to draw
+    uint32_t rgb;  // 0xRRGGBB, for brightness maths
 };
 
 StateStyle styleFor(AppState s);
